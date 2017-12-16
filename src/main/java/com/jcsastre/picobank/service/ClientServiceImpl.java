@@ -1,6 +1,7 @@
 package com.jcsastre.picobank.service;
 
 import com.jcsastre.picobank.entity.Client;
+import com.jcsastre.picobank.exception.ClientNotFoundException;
 import com.jcsastre.picobank.exception.ClientWithThatEmailAlreadyExistsException;
 import com.jcsastre.picobank.repository.ClientRepository;
 import org.apache.commons.validator.routines.EmailValidator;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class ClientServiceImpl implements ClientService {
@@ -44,6 +46,20 @@ public class ClientServiceImpl implements ClientService {
         client.setBalanceInCents(0);
 
         clientRepository.saveAndFlush(client);
+
+        return client;
+    }
+
+    @Override
+    public Client getClient(
+        String clientId
+    ) {
+
+        Assert.notNull(clientId, "clientId is null");
+
+        final Client client = clientRepository.findOne(UUID.fromString(clientId));
+        if (client == null)
+            throw new ClientNotFoundException();
 
         return client;
     }

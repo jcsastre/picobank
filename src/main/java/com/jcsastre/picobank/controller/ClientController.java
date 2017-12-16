@@ -1,9 +1,9 @@
 package com.jcsastre.picobank.controller;
 
 import com.jcsastre.picobank.dto.RequestPostClientDto;
+import com.jcsastre.picobank.dto.ResponseGetClientDto;
 import com.jcsastre.picobank.entity.Client;
 import com.jcsastre.picobank.service.ClientService;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,10 +13,10 @@ import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 import java.io.IOException;
 import java.net.URI;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/clients")
-@Slf4j
 public class ClientController {
 
     private ClientService clientService;
@@ -44,7 +44,20 @@ public class ClientController {
             .build();
     }
 
-    @ExceptionHandler({IllegalArgumentException.class, NullPointerException.class})
+    @GetMapping(value="/{clientId}", headers="Accept=application/json")
+    public ResponseEntity<ResponseGetClientDto> getOneClient(
+        @PathVariable UUID clientId
+    ) {
+
+        final Client client = clientService.getClient(clientId.toString());
+
+        final ResponseGetClientDto dto = ResponseGetClientDto.asGetClientDto.apply(client);
+
+        return
+            ResponseEntity.ok(dto);
+    }
+
+    @ExceptionHandler({IllegalArgumentException.class})
     void handleBadRequests(HttpServletResponse response) throws IOException {
         response.sendError(HttpStatus.BAD_REQUEST.value());
     }

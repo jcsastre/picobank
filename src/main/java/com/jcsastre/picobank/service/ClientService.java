@@ -8,4 +8,8 @@ public interface ClientService {
         String email,
         String password
     );
+
+    Client getClient(
+        String clientId
+    );
 }

@@ -1,6 +1,7 @@
 package com.jcsastre.picobank;
 
 import com.jcsastre.picobank.dto.RequestPostClientDto;
+import com.jcsastre.picobank.dto.ResponseGetClientDto;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,21 +25,32 @@ public class HappyPathIT {
 
     // Happy Path
     //
-    // 1. Post client
-    // 2. Add Operation
-    // 3. Get client info
+    // 1. As user I want to POST a Client
+    // 2. then GET Client info
 
     @Test
     public void happyPath() {
 
-        final ResponseEntity<Void> responseEntity =
+        final String email = "email@email.com";
+        final String password = "password";
+
+        final ResponseEntity<Void> postClientResponseEntity =
             this.testRestTemplate.postForEntity(
                 "/clients",
-                new RequestPostClientDto("email@email.com", "plain_password"),
+                new RequestPostClientDto(email, password),
                 Void.class
             );
 
-        assertThat(responseEntity.getStatusCode(), equalTo(HttpStatus.CREATED));
-        assertThat(responseEntity.getHeaders().getLocation(), is(any(URI.class)));
+        assertThat(postClientResponseEntity.getStatusCode(), equalTo(HttpStatus.CREATED));
+        assertThat(postClientResponseEntity.getHeaders().getLocation(), is(any(URI.class)));
+
+        final URI uriClient = postClientResponseEntity.getHeaders().getLocation();
+
+        final ResponseEntity<ResponseGetClientDto> getClientResponseEntity =
+            this.testRestTemplate.getForEntity(uriClient, ResponseGetClientDto.class);
+
+        assertThat(getClientResponseEntity.getStatusCode(), equalTo(HttpStatus.OK));
+        assertThat(getClientResponseEntity.getBody().getData().getClient().getEmail(), equalTo(email));
+        assertThat(getClientResponseEntity.getBody().getData().getClient().getBalanceInCents(), equalTo(0));
     }
 }
