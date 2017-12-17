@@ -27,7 +27,7 @@ public class ClientServiceIT {
     private ClientRepository clientRepository;
 
     @Autowired
-    private TestEntityManager entityManager;
+    private TestEntityManager testEntityManager;
 
     private ClientServiceImpl clientService;
 
@@ -87,24 +87,25 @@ public class ClientServiceIT {
     public void test_01_04() throws Exception {
 
         // Given
-        Client clientPersisted = persistClientWithOneOperation();
+        Client clientSaved = saveClientWithOneOperation();
 
         // When
-        clientService.createClient(clientPersisted.getEmail(), PASSWORD);
+        clientService.createClient(clientSaved.getEmail(), PASSWORD);
     }
 
     @Test
     public void test_01_05() throws Exception {
 
         // When
-        final Client clientPersisted = clientService.createClient(EMAIL_WELLFORMED, PASSWORD);
+        final Client clientCreated = clientService.createClient(EMAIL_WELLFORMED, PASSWORD);
+        final Client clientFound = testEntityManager.find(Client.class, clientCreated.getId());
 
         // Then
-        assertThat(clientPersisted.getId(), instanceOf(UUID.class));
-        assertThat(clientPersisted.getEmail(), equalTo(EMAIL_WELLFORMED));
-        assertThat(clientPersisted.getPasswordHash(), not(equalTo(PASSWORD)));
-        assertThat(clientPersisted.getBalanceInCents(), equalTo(0));
-        assertThat(clientPersisted.getOperations(), hasSize(0));
+        assertThat(clientCreated.getId(), instanceOf(UUID.class));
+        assertThat(clientFound.getEmail(), equalTo(EMAIL_WELLFORMED));
+        assertThat(clientFound.getPasswordHash(), not(equalTo(PASSWORD)));
+        assertThat(clientFound.getBalanceInCents(), equalTo(0));
+        assertThat(clientFound.getOperations(), hasSize(0));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -125,7 +126,7 @@ public class ClientServiceIT {
     public void test_02_03() throws Exception {
 
         // Given
-        persistClientWithOneOperation();
+        saveClientWithOneOperation();
 
         // When
         clientService.getClient(UUID.randomUUID().toString());
@@ -135,16 +136,17 @@ public class ClientServiceIT {
     public void test_02_04() throws Exception {
 
         // Given
-        Client clientPersisted = persistClientWithOneOperation();
+        Client clientSaved = saveClientWithOneOperation();
 
         // When
-        final Client gotClient = clientService.getClient(clientPersisted.getId().toString());
+        final Client gotClient = clientService.getClient(clientSaved.getId().toString());
 
         // Then
-        assertThat(gotClient, equalTo(clientPersisted));
+        assertThat(gotClient, equalTo(clientSaved));
     }
 
-    private Client persistClientWithOneOperation() {
+    private Client saveClientWithOneOperation() {
+
         Client client = new Client();
         client.setEmail(EMAIL_WELLFORMED);
         client.setPasswordHash(PASSWORD);
@@ -153,7 +155,8 @@ public class ClientServiceIT {
         operation.setType(Operation.Type.DEPOSIT);
         operation.setAmountInCents(10);
         client.addOperation(operation);
-        clientRepository.saveAndFlush(client);
-        return client;
+
+        return
+            testEntityManager.persistFlushFind(client);
     }
 }

@@ -25,8 +25,8 @@ public class HappyPathIT {
 
     // Happy Path
     //
-    // 1. As user I want to POST a Client
-    // 2. then GET Client info
+    // 1. As user I want to POST Client ...
+    // 2. ... then when GET Client I got the correct information.
 
     @Test
     public void happyPath() {
