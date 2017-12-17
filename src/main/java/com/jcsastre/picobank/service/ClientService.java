@@ -12,4 +12,10 @@ public interface ClientService {
     Client getClient(
         String clientId
     );
+
+    Client addOperation(
+        String clientId,
+        String operationType,
+        Integer amountInCents
+    );
 }

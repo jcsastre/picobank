@@ -2,10 +2,12 @@ package com.jcsastre.picobank.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jcsastre.picobank.dto.RequestPostClientDto;
+import com.jcsastre.picobank.dto.RequestPostClientOperationDto;
 import com.jcsastre.picobank.entity.Client;
 import com.jcsastre.picobank.entity.Operation;
 import com.jcsastre.picobank.exception.ClientNotFoundException;
 import com.jcsastre.picobank.exception.ClientWithThatEmailAlreadyExistsException;
+import com.jcsastre.picobank.exception.NonEnoughBalanceException;
 import com.jcsastre.picobank.service.ClientService;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -22,6 +24,8 @@ import java.util.UUID;
 import static io.github.benas.randombeans.api.EnhancedRandom.random;
 import static org.hamcrest.Matchers.*;
 import static org.hamcrest.core.IsInstanceOf.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -53,7 +57,18 @@ public class ClientControllerTest {
     // 02.02. Should return HttpStatus BAD_REQUEST (400) when clientId is not valid
     // 02.03. Should return HttpStatus NOT_FOUND (404) when there is no client with clientId
     // 02.04. Should return HttpStatus OK (200) and correct response body when Happy Path
-
+    //
+    // 03. POST Operation
+    //
+    // 03.01. Should return HttpStatus BAD_REQUEST (400) when clientId is not valid
+    // 03.02. Should return HttpStatus BAD_REQUEST (400) when operationTypeAsString not provided
+    // 03.03. Should return HttpStatus BAD_REQUEST (400) when operationTypeAsString not valid
+    // 03.04. Should return HttpStatus BAD_REQUEST (400) when amountInCents not provided
+    // 03.05. Should return HttpStatus BAD_REQUEST (400) when amountInCents not a number
+    // 03.06. Should return HttpStatus BAD_REQUEST (400) when amountInCents is negative
+    // 03.07. Should return HttpStatus NOT_FOUND (404) when there is no client with clientId
+    // 03.08. Should return HttpStatus CONFLICT (409) when there is not enough balance to apply withdrawal operation
+    // 03.09. Should return HttpStatus OK (200) and correct response body when Happy Path on deposit/withdrawal operation
 
     private static final String EMAIL_WELLFORMED = "email@dot.com";
     private static final String EMAIL_MALFORMED = "email-dot.com";
@@ -204,5 +219,189 @@ public class ClientControllerTest {
             .andExpect(jsonPath("$.data.client.operations", hasSize(client.getOperations().size())))
             .andExpect(jsonPath("$.data.client.operations[0].type", is(client.getOperations().get(0).getType().toString())))
             .andExpect(jsonPath("$.data.client.operations[0].amountInCents", is(client.getOperations().get(0).getAmountInCents())));
+    }
+
+    @Test
+    public void test_03_01() throws Exception {
+
+        // Given
+        final String nonValidUuid = "non_valid_uuid";
+
+        // When
+        mockMvc.perform(post("/clients/"+nonValidUuid+"/operations")
+            .contentType(MediaType.APPLICATION_JSON))
+
+        // Then
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void test_03_02() throws Exception {
+
+        // Given
+        final String requestBody =
+            "{" +
+                "\"amountInCents\": 10" +
+                "}";
+
+        // When
+        mockMvc.perform(post("/clients/"+UUID.randomUUID()+"/operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(requestBody))
+
+        // Then
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void test_03_03() throws Exception {
+
+        // Given
+        final RequestPostClientOperationDto dto = new RequestPostClientOperationDto("invalid_operation_type", 100);
+        final String dtoAsJson = OBJECT_MAPPER.writeValueAsString(dto);
+
+        // When
+        mockMvc.perform(post("/clients/"+UUID.randomUUID()+"/operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(dtoAsJson))
+
+        // Then
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void test_03_04() throws Exception {
+
+        // Given
+        final String requestBody =
+            "{" +
+                "\"operationTypeAsString\": \"deposit\"" +
+                "}";
+
+        // When
+        mockMvc.perform(post("/clients/"+UUID.randomUUID()+"/operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(requestBody))
+
+        // Then
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void test_03_05() throws Exception {
+
+        // Given
+        final String requestBody =
+            "{" +
+                "\"operationTypeAsString\": \"deposit\"," +
+                "\"amountInCents\": \"non_valid_amountInCents\"" +
+                "}";
+
+        // When
+        mockMvc.perform(post("/clients/"+UUID.randomUUID()+"/operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(requestBody))
+
+        // Then
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void test_03_06() throws Exception {
+
+        // Given
+        final UUID randomUUID = UUID.randomUUID();
+        final RequestPostClientOperationDto dto = new RequestPostClientOperationDto("deposit", -10);
+        final String dtoAsJson = OBJECT_MAPPER.writeValueAsString(dto);
+        when(clientService.addOperation(randomUUID.toString(), dto.getOperationTypeAsString(), dto.getAmountInCents())).thenThrow(new IllegalArgumentException());
+
+        // When
+        mockMvc.perform(post("/clients/"+randomUUID+"/operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(dtoAsJson))
+
+        // Then
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void test_03_07() throws Exception {
+
+        // Given
+        final UUID randomUUID = UUID.randomUUID();
+        final RequestPostClientOperationDto dto = new RequestPostClientOperationDto("deposit", 10);
+        final String dtoAsJson = OBJECT_MAPPER.writeValueAsString(dto);
+        when(clientService.addOperation(randomUUID.toString(), dto.getOperationTypeAsString(), dto.getAmountInCents())).thenThrow(new ClientNotFoundException());
+
+        // When
+        mockMvc.perform(post("/clients/"+randomUUID+"/operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(dtoAsJson))
+
+        // Then
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    public void test_03_08() throws Exception {
+
+        // Given
+        final UUID randomUUID = UUID.randomUUID();
+        final RequestPostClientOperationDto dto = new RequestPostClientOperationDto("deposit", 10);
+        final String dtoAsJson = OBJECT_MAPPER.writeValueAsString(dto);
+        when(clientService.addOperation(randomUUID.toString(), dto.getOperationTypeAsString(), dto.getAmountInCents())).thenThrow(new NonEnoughBalanceException());
+
+        // When
+        mockMvc.perform(post("/clients/"+randomUUID+"/operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(dtoAsJson))
+
+        // Then
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    public void test_03_09() throws Exception {
+
+        // Given
+        final UUID randomUUID = UUID.randomUUID();
+        final RequestPostClientOperationDto randomDto = new RequestPostClientOperationDto("deposit", 100);
+        final String randomDtoAsJson = OBJECT_MAPPER.writeValueAsString(randomDto);
+        final Client client = buildClientWithOneOperation();
+        when(clientService.addOperation(anyString(), anyString(), anyInt())).thenReturn(client);
+
+        // When
+        mockMvc.perform(post("/clients/"+randomUUID+"/operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(randomDtoAsJson))
+
+        // Then
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_UTF8_VALUE))
+            .andExpect(jsonPath("$", hasKey("status")))
+            .andExpect(jsonPath("$.status", is(HttpStatus.OK.value())))
+            .andExpect(jsonPath("$", hasKey("data")))
+            .andExpect(jsonPath("$.data", hasKey("client")))
+            .andExpect(jsonPath("$.data.client", hasKey("email")))
+            .andExpect(jsonPath("$.data.client.email", is(client.getEmail())))
+            .andExpect(jsonPath("$.data.client", hasKey("balanceInCents")))
+            .andExpect(jsonPath("$.data.client.balanceInCents", is(client.getBalanceInCents())))
+            .andExpect(jsonPath("$.data.client", hasKey("operations")))
+            .andExpect(jsonPath("$.data.client.operations", hasSize(client.getOperations().size())))
+            .andExpect(jsonPath("$.data.client.operations[0].type", is(client.getOperations().get(0).getType().toString())))
+            .andExpect(jsonPath("$.data.client.operations[0].amountInCents", is(client.getOperations().get(0).getAmountInCents())));
+    }
+
+    private Client buildClientWithOneOperation() {
+
+        Client client = new Client();
+        client.setEmail(EMAIL_WELLFORMED);
+        client.setPasswordHash(PASSWORD);
+        client.setBalanceInCents(10);
+        final Operation operation = new Operation();
+        operation.setType(Operation.Type.DEPOSIT);
+        operation.setAmountInCents(10);
+        client.addOperation(operation);
+        return client;
     }
 }

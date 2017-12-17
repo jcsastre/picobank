@@ -1,6 +1,7 @@
 package com.jcsastre.picobank.controller;
 
 import com.jcsastre.picobank.dto.RequestPostClientDto;
+import com.jcsastre.picobank.dto.RequestPostClientOperationDto;
 import com.jcsastre.picobank.dto.ResponseGetClientDto;
 import com.jcsastre.picobank.entity.Client;
 import com.jcsastre.picobank.service.ClientService;
@@ -55,6 +56,21 @@ public class ClientController {
 
         return
             ResponseEntity.ok(dto);
+    }
+
+    @PostMapping(value="/{clientId}/operations", headers="Accept=application/json")
+    public ResponseEntity<ResponseGetClientDto> createOneOperation(
+        @PathVariable UUID clientId,
+        @Valid @RequestBody RequestPostClientOperationDto dto
+    ) {
+
+        final Client client =
+            clientService.addOperation(clientId.toString(), dto.getOperationTypeAsString(), dto.getAmountInCents());
+
+        final ResponseGetClientDto responseGetClientDto = ResponseGetClientDto.asGetClientDto.apply(client);
+
+        return
+            ResponseEntity.ok(responseGetClientDto);
     }
 
     @ExceptionHandler({IllegalArgumentException.class})

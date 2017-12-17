@@ -4,6 +4,7 @@ import com.jcsastre.picobank.entity.Client;
 import com.jcsastre.picobank.entity.Operation;
 import com.jcsastre.picobank.exception.ClientNotFoundException;
 import com.jcsastre.picobank.exception.ClientWithThatEmailAlreadyExistsException;
+import com.jcsastre.picobank.exception.NonEnoughBalanceException;
 import com.jcsastre.picobank.repository.ClientRepository;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,8 +35,8 @@ public class ClientServiceIT {
     private static final String EMAIL_WELLFORMED = "email@email.com";
     private static final String EMAIL_MALFORMED = "email";
     private static final String PASSWORD = "password";
-
-    // TODO: check TestEntityManager
+    private static final String UUID_VALID_AS_STRING = "eda22360-0772-49c3-aa60-835220760aa9";
+    private static final String UUID_INVALID_AS_STRING = "eda22360835220760aa9";
 
     // Scenarios
     //
@@ -53,6 +54,18 @@ public class ClientServiceIT {
     // 02.02. Should throw IllegalArgumentException when clienId is not valid
     // 02.03. Should throw ClientNotFoundException when there is doesn't exist a Client with userId
     // 02.04. Happy Path
+    //
+    // 03. addOperation
+    // 03.01. Should throw IllegalArgumentException when clienId is null
+    // 03.02. Should throw IllegalArgumentException when clienId is not valid
+    // 03.03. Should throw IllegalArgumentException when operationType is null
+    // 03.04. Should throw IllegalArgumentException when operationType is not valid
+    // 03.05. Should throw IllegalArgumentException when amount is null
+    // 03.06. Should throw IllegalArgumentException when amount is not positive
+    // 03.07. Should throw ClientNotFoundException when there is doesn't exist a Client with userId
+    // 03.08. Should throw NotEnoughBalance when there is not enough balance to apply a withdrawal
+    // 03.09. Happy Path Deposit
+    // 03.10. Happy Path Withdrawal
 
     @Before
     public void setUp() {
@@ -145,6 +158,98 @@ public class ClientServiceIT {
         assertThat(gotClient, equalTo(clientSaved));
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void test_03_01() throws Exception {
+
+        // When
+        clientService.addOperation(null, Operation.Type.WITHDRAWAL.name(), 10);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_03_02() throws Exception {
+
+        // When
+        clientService.addOperation("invalid_id", Operation.Type.WITHDRAWAL.name(), 10);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_03_03() throws Exception {
+
+        // When
+        clientService.addOperation(UUID_VALID_AS_STRING, null, 10);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_03_04() throws Exception {
+
+        // When
+        clientService.addOperation(UUID_VALID_AS_STRING, "invalid_operation_type", 10);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_03_05() throws Exception {
+
+        // When
+        clientService.addOperation(UUID_VALID_AS_STRING, Operation.Type.WITHDRAWAL.name(), null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_03_06() throws Exception {
+
+        // When
+        clientService.addOperation(UUID_VALID_AS_STRING, Operation.Type.WITHDRAWAL.name(), -10);
+    }
+
+    @Test(expected = ClientNotFoundException.class)
+    public void test_03_07() throws Exception {
+
+        // When
+        clientService.addOperation(UUID_VALID_AS_STRING, Operation.Type.WITHDRAWAL.name(), 1);
+    }
+
+    @Test(expected = NonEnoughBalanceException.class)
+    public void test_03_08() throws Exception {
+
+        // Given
+        Client client = saveClientWithOneOperation();
+
+        // When
+        clientService.addOperation(client.getId().toString(), Operation.Type.WITHDRAWAL.name(), 100);
+    }
+
+    @Test
+    public void test_03_09() throws Exception {
+
+        // Given
+        Client client = saveClientWithOneOperation();
+
+        // When
+        clientService.addOperation(client.getId().toString(), Operation.Type.DEPOSIT.name(), 1);
+        final Client foundClient = clientRepository.findOne(client.getId());
+
+        // Then
+        assertThat(foundClient.getBalanceInCents(), equalTo(11));
+        assertThat(foundClient.getOperations(), hasSize(2));
+        assertThat(foundClient.getOperations().get(1).getType(), equalTo(Operation.Type.DEPOSIT));
+        assertThat(foundClient.getOperations().get(1).getAmountInCents(), equalTo(1));
+    }
+
+    @Test
+    public void test_03_10() throws Exception {
+
+        // Given
+        Client client = saveClientWithOneOperation();
+
+        // When
+        clientService.addOperation(client.getId().toString(), Operation.Type.WITHDRAWAL.name(), 1);
+        final Client foundClient = clientRepository.findOne(client.getId());
+
+        // Then
+        assertThat(foundClient.getBalanceInCents(), equalTo(9));
+        assertThat(foundClient.getOperations(), hasSize(2));
+        assertThat(foundClient.getOperations().get(1).getType(), equalTo(Operation.Type.WITHDRAWAL));
+        assertThat(foundClient.getOperations().get(1).getAmountInCents(), equalTo(1));
+    }
     private Client saveClientWithOneOperation() {
 
         Client client = new Client();

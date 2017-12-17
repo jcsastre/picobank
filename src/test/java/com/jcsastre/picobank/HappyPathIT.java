@@ -1,7 +1,9 @@
 package com.jcsastre.picobank;
 
 import com.jcsastre.picobank.dto.RequestPostClientDto;
+import com.jcsastre.picobank.dto.RequestPostClientOperationDto;
 import com.jcsastre.picobank.dto.ResponseGetClientDto;
+import com.jcsastre.picobank.entity.Operation;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,14 +27,17 @@ public class HappyPathIT {
 
     // Happy Path
     //
-    // 1. As user I want to POST Client ...
-    // 2. ... then when GET Client I got the correct information.
+    // 1. I POST Client ...
+    // 2. ... then I GET Client and got the correct information.
+    // 3. ... then I POST Operation and got the correct information
 
     @Test
     public void happyPath() {
 
         final String email = "email@email.com";
         final String password = "password";
+
+        // 1. I POST Client ...
 
         final ResponseEntity<Void> postClientResponseEntity =
             this.testRestTemplate.postForEntity(
@@ -44,6 +49,8 @@ public class HappyPathIT {
         assertThat(postClientResponseEntity.getStatusCode(), equalTo(HttpStatus.CREATED));
         assertThat(postClientResponseEntity.getHeaders().getLocation(), is(any(URI.class)));
 
+        // 2. ... then I GET Client and got the correct information.
+
         final URI uriClient = postClientResponseEntity.getHeaders().getLocation();
 
         final ResponseEntity<ResponseGetClientDto> getClientResponseEntity =
@@ -52,5 +59,21 @@ public class HappyPathIT {
         assertThat(getClientResponseEntity.getStatusCode(), equalTo(HttpStatus.OK));
         assertThat(getClientResponseEntity.getBody().getData().getClient().getEmail(), equalTo(email));
         assertThat(getClientResponseEntity.getBody().getData().getClient().getBalanceInCents(), equalTo(0));
+
+        // 3. ... then I POST Operation and got the correct information
+
+        final Integer amountInCents = 100;
+
+        final ResponseEntity<ResponseGetClientDto> postOperationResponseEntity =
+            this.testRestTemplate.postForEntity(
+                uriClient + "/operations",
+                new RequestPostClientOperationDto(Operation.Type.DEPOSIT.toString(), amountInCents),
+                ResponseGetClientDto.class
+            );
+        assertThat(postOperationResponseEntity.getStatusCode(), equalTo(HttpStatus.OK));
+        assertThat(postOperationResponseEntity.getBody().getData().getClient().getEmail(), equalTo(email));
+        assertThat(postOperationResponseEntity.getBody().getData().getClient().getBalanceInCents(), equalTo(amountInCents));
+        assertThat(postOperationResponseEntity.getBody().getData().getClient().getOperations().get(0).getType(), equalTo(Operation.Type.DEPOSIT));
+        assertThat(postOperationResponseEntity.getBody().getData().getClient().getOperations().get(0).getAmountInCents(), equalTo(amountInCents));
     }
 }
